@@ -1,4 +1,7 @@
-local cjson        = require "cjson"
+local cjson     = require "cjson"
+local db_errors = require "kong.db.errors"
+local Errors    = require "kong.dao.errors"
+local pl_pretty = require("pl.pretty").write
 
 local setmetatable = setmetatable
 local tonumber     = tonumber
@@ -9,6 +12,8 @@ local pairs        = pairs
 local type         = type
 local min          = math.min
 local log          = ngx.log
+local fmt          = string.format
+
 
 
 local ERR          = ngx.ERR
@@ -29,14 +34,14 @@ local DAO   = {}
 DAO.__index = DAO
 
 
-local function generate_foreign_key_methods(self)
-  local schema = self.schema
+local function generate_foreign_key_methods(schema)
+  local methods = {}
 
   for name, field in schema:each_field() do
     if field.type == "foreign" then
       local method_name = "for_" .. name
 
-      self[method_name] = function(self, foreign_key, size, offset)
+      methods[method_name] = function(self, foreign_key, size, offset)
         if type(foreign_key) ~= "table" then
           error("foreign_key must be a table", 2)
         end
@@ -85,13 +90,13 @@ local function generate_foreign_key_methods(self)
 
     elseif field.unique then
       local function validate_unique_value(unique_value)
-        local ok, err = self.schema:validate_field(field, unique_value)
+        local ok, err = schema:validate_field(field, unique_value)
         if not ok then
           error("invalid argument '" .. name .. "' (" .. err .. ")", 3)
         end
       end
 
-      self["select_by_" .. name] = function(self, unique_value)
+      methods["select_by_" .. name] = function(self, unique_value)
         validate_unique_value(unique_value)
 
         local row, err_t = self.strategy:select_by_field(name, unique_value)
@@ -106,7 +111,7 @@ local function generate_foreign_key_methods(self)
         return self:row_to_entity(row)
       end
 
-      self["update_by_" .. name] = function(self, unique_value, entity)
+      methods["update_by_" .. name] = function(self, unique_value, entity)
         validate_unique_value(unique_value)
 
         local entity_to_update, err = self.schema:process_auto_fields(entity, "update")
@@ -137,7 +142,7 @@ local function generate_foreign_key_methods(self)
         return row
       end
 
-      self["upsert_by_" .. name] = function(self, unique_value, entity)
+      methods["upsert_by_" .. name] = function(self, unique_value, entity)
         validate_unique_value(unique_value)
 
         local entity_to_upsert, err = self.schema:process_auto_fields(entity, "upsert")
@@ -168,28 +173,43 @@ local function generate_foreign_key_methods(self)
         return row
       end
 
-      self["delete_by_" .. name] = function(self, unique_value)
+      methods["delete_by_" .. name] = function(self, unique_value)
         validate_unique_value(unique_value)
+
+        local entity, err, err_t = self["select_by_" .. name](self, unique_value)
+        if err then
+          return nil, err, err_t
+        end
+        if not entity then
+          return true
+        end
 
         local _, err_t = self.strategy:delete_by_field(name, unique_value)
         if err_t then
           return nil, tostring(err_t), err_t
         end
 
-        self:post_crud_event("delete")
+        self:post_crud_event("delete", entity)
 
         return true
       end
     end
   end
+
+  return methods
 end
 
 
-function _M.new(schema, strategy, errors)
+function _M.new(db, schema, strategy, errors)
+  local fk_methods = generate_foreign_key_methods(schema)
+  local super      = setmetatable(fk_methods, DAO)
+
   local self = {
+    db       = db,
     schema   = schema,
     strategy = strategy,
     errors   = errors,
+    super    = super,
   }
 
   if schema.dao then
@@ -199,9 +219,7 @@ function _M.new(schema, strategy, errors)
     end
   end
 
-  generate_foreign_key_methods(self)
-
-  return setmetatable(self, DAO)
+  return setmetatable(self, { __index = super })
 end
 
 
@@ -427,12 +445,20 @@ function DAO:delete(primary_key)
     return nil, tostring(err_t), err_t
   end
 
+  local entity, err, err_t = self:select(primary_key)
+  if err then
+    return nil, err, err_t
+  end
+  if not entity then
+    return true
+  end
+
   local _, err_t = self.strategy:delete(primary_key)
   if err_t then
     return nil, tostring(err_t), err_t
   end
 
-  self:post_crud_event("delete")
+  self:post_crud_event("delete", entity)
 
   return true
 end
@@ -483,6 +509,39 @@ function DAO:post_crud_event(operation, entity)
     end
   end
 
+end
+
+
+function DAO:check_foreign_key(primary_key, human_name)
+  local entity, err, err_t = self:select(primary_key)
+
+  if err then
+    if err_t.code == db_errors.codes.DATABASE_ERROR then
+      return false, Errors.db(err)
+    end
+
+    return false, Errors.schema(err_t)
+  end
+
+  if entity then
+    return entity
+  end
+
+  local msg = string.format("No such %s (%s)" ,
+                            human_name,
+                            pl_pretty(primary_key, ""))
+  return false, Errors.foreign(msg)
+end
+
+
+function DAO:cache_key(arg1, arg2, arg3, arg4, arg5)
+  return fmt("%s:%s:%s:%s:%s:%s",
+             self.schema.name,
+             arg1 == nil and "" or arg1,
+             arg2 == nil and "" or arg2,
+             arg3 == nil and "" or arg3,
+             arg4 == nil and "" or arg4,
+             arg5 == nil and "" or arg5)
 end
 
 
