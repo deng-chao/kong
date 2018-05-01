@@ -533,9 +533,13 @@ local function load(path, custom_conf)
   -- merge plugins
   do
     local plugin_list = {}
-    for i = 1, #conf.default_plugins do
-      local plugin_name = pl_stringx.strip(conf.default_plugins[i])
-      plugin_list[plugin_name] = true
+    if #conf.default_plugins > 0 and conf.default_plugins[1] ~= "off" then
+      for i = 1, #conf.default_plugins do
+        if conf.default_plugins[i] ~= "off" then
+          local plugin_name = pl_stringx.strip(conf.default_plugins[i])
+          plugin_list[plugin_name] = true
+        end
+      end
     end
     for i = 1, #conf.custom_plugins do
       local plugin_name = pl_stringx.strip(conf.custom_plugins[i])
