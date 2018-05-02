@@ -29,6 +29,32 @@ describe("Default plugins" , function()
     end)
   end)
 
+  describe("disables all plugin when 'default_plugins=off, key-auth'" , function()
+    local client
+    setup(function()
+      assert(helpers.start_kong({
+        default_plugins = "off, key-auth",
+        custom_plugins = "", -- to override default custom_plugins for tests
+      }))
+      client = helpers.admin_client()
+    end)
+    teardown(function()
+      if client then
+        client:close()
+      end
+      helpers.stop_kong()
+    end)
+    it(function()
+      local res = assert(client:send {
+        method = "GET",
+        path = "/",
+      })
+      local body = assert.res_status(200 , res)
+      local json = assert(cjson.decode(body))
+      assert.equal(0, #json.plugins.available_on_server)
+    end)
+  end)
+
   describe("does not disable plugins when 'off' is not at the first index" , function()
     local client
     setup(function()
