@@ -43,6 +43,33 @@ _M.dao_insert_values = {
 
 _M.additional_tables = { "ttls", "cluster_events", "routes", "services" }
 
+
+-- Check foreign constraints in relations between the legacy and the new DAO.
+-- Foreign constraints within the same DAO are done natively by Postgres.
+local function check_foreign_constraints(self, values, constraints)
+  local errors
+
+  for col, constraint in pairs(constraints.foreign) do
+    -- Only check foreign keys if value is non-null,
+    -- if must not be null, field should be required
+    if values[col] ~= nil and values[col] ~= ngx.null then
+      -- Only check new-DAO constraints.
+      if self.new_db[constraint.table] then
+        local res, err = self.new_db[constraint.table]:check_foreign_key({
+          [constraint.col] = values[col]
+        }, constraint.table)
+        if err then return nil, err
+        elseif not res then
+          errors = utils.add_error(errors, col, values[col])
+        end
+      end
+    end
+  end
+
+  return errors == nil, Errors.foreign(errors)
+end
+
+
 function _M.new(kong_config)
   local self = _M.super.new()
 
@@ -399,8 +426,13 @@ local function serialize_timestamps(self, tbl, schema)
   return result
 end
 
-function _M:insert(table_name, schema, model, _, options)
+function _M:insert(table_name, schema, model, constraints, options)
   options = options or {}
+
+  local ok, err = check_foreign_constraints(self, model, constraints)
+  if not ok then
+    return nil, err
+  end
 
   local values, err = serialize_timestamps(self, model, schema)
   if err then
@@ -493,8 +525,13 @@ function _M:count(table_name, tbl, schema)
   else                  return nil, "bad rows result" end
 end
 
-function _M:update(table_name, schema, _, filter_keys, values, nils, full, _, options)
+function _M:update(table_name, schema, constraints, filter_keys, values, nils, full, _, options)
   options = options or {}
+
+  local ok, err = check_foreign_constraints(self, values, constraints)
+  if not ok then
+    return nil, err
+  end
 
   local args = {}
   local values, err = serialize_timestamps(self, values, schema)

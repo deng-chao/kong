@@ -140,7 +140,7 @@ for _, strategy in helpers.each_strategy() do
         assert.falsy(plugin)
         assert.truthy(err)
         assert.True(err.foreign)
-        assert.matches("No such Consumer ({id=\"" .. plugin_tbl.consumer_id .. "\"})", tostring(err), nil, true)
+        assert.matches("No such entry in consumers ({id=\"" .. plugin_tbl.consumer_id .. "\"})", tostring(err), nil, true)
       end)
       it("does not update plugin if invalid foreign key", function()
         plugin_fixture.api_id = api_fixture.id

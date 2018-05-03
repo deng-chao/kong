@@ -527,7 +527,7 @@ function DAO:check_foreign_key(primary_key, human_name)
     return entity
   end
 
-  local msg = string.format("No such %s (%s)" ,
+  local msg = string.format("No such entry in %s (%s)" ,
                             human_name,
                             pl_pretty(primary_key, ""))
   return false, Errors.foreign(msg)

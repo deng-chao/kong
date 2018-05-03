@@ -39,11 +39,9 @@ local function build_constraints(schemas)
       if type(field.foreign) == "string" then
         local f_entity, f_field = unpack(utils.split(field.foreign, ":"))
         if f_entity ~= nil and f_field ~= nil then
-          local f_schema = assert(schemas[f_entity], "could not find schema for " ..
-                                  f_entity .. " when parsing constraints for " ..
-                                  m_name)
+          local f_schema = schemas[f_entity]
           constraints.foreign[col] = {
-            table = f_schema.table,
+            table = f_schema and f_schema.table or f_entity,
             schema = f_schema,
             col = f_field,
             f_entity = f_entity
@@ -69,16 +67,18 @@ local function load_daos(self, schemas, constraints)
       for col, f_constraint in pairs(constraints[m_name].foreign) do
         local parent_name = f_constraint.f_entity
         local parent_constraints = constraints[parent_name]
-        if parent_constraints.cascade == nil then
-          parent_constraints.cascade = {}
-        end
+        if parent_constraints then
+          if parent_constraints.cascade == nil then
+            parent_constraints.cascade = {}
+          end
 
-        parent_constraints.cascade[m_name] = {
-          table = schema.table,
-          schema = schema,
-          f_col = col,
-          col = f_constraint.col
-        }
+          parent_constraints.cascade[m_name] = {
+            table = schema.table,
+            schema = schema,
+            f_col = col,
+            col = f_constraint.col
+          }
+        end
       end
     end
   end

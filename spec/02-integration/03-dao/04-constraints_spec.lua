@@ -244,7 +244,7 @@ for _, strategy in helpers.each_strategy() do
         assert.falsy(plugin)
         assert.truthy(err)
         assert.True(err.foreign)
-        assert.equal('No such Service ({id="' .. plugin_fixture.service_id .. '"})',
+        assert.equal('No such entry in services ({id="' .. plugin_fixture.service_id .. '"})',
                      err.message)
       end)
 
@@ -256,7 +256,7 @@ for _, strategy in helpers.each_strategy() do
         assert.falsy(plugin)
         assert.truthy(err)
         assert.True(err.foreign)
-        assert.equal('No such Route ({id="' .. plugin_fixture.route_id .. '"})',
+        assert.equal('No such entry in routes ({id="' .. plugin_fixture.route_id .. '"})',
                      err.message)
       end)
 
@@ -272,7 +272,7 @@ for _, strategy in helpers.each_strategy() do
         assert.falsy(plugin)
         assert.truthy(err)
         assert.True(err.foreign)
-        assert.equal('No such Consumer ({id="' .. plugin_tbl.consumer_id .. '"})',
+        assert.equal('No such entry in consumers ({id="' .. plugin_tbl.consumer_id .. '"})',
                      err.message)
       end)
 
@@ -287,7 +287,7 @@ for _, strategy in helpers.each_strategy() do
         assert.falsy(plugin)
         assert.truthy(err)
         assert.True(err.foreign)
-        assert.equal('No such Service ({id="' .. fake_service_id .. '"})',
+        assert.equal('No such entry in services ({id="' .. fake_service_id .. '"})',
                      err.message)
       end)
     end)

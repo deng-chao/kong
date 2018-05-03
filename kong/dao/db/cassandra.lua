@@ -397,20 +397,35 @@ local function check_unique_constraints(self, table_name, constraints, values, p
   return errors == nil, Errors.unique(errors)
 end
 
-local function check_foreign_constaints(self, values, constraints)
+local function check_foreign_constraints(self, values, constraints)
   local errors
 
   for col, constraint in pairs(constraints.foreign) do
     -- Only check foreign keys if value is non-null,
     -- if must not be null, field should be required
     if values[col] ~= nil and values[col] ~= ngx.null then
-      local res, err = self:find(constraint.table, constraint.schema, {
-        [constraint.col] = values[col]
-      })
-      if err then return nil, err
-      elseif not res then
-        errors = utils.add_error(errors, col, values[col])
+
+      if self.new_db[constraint.table] then
+        -- new DAO
+        local res, err = self.new_db[constraint.table]:check_foreign_key({
+          [constraint.col] = values[col]
+        }, constraint.table)
+        if err then return nil, err
+        elseif not res then
+          errors = utils.add_error(errors, col, values[col])
+        end
+
+      else
+        -- old DAO
+        local res, err = self:find(constraint.table, constraint.schema, {
+          [constraint.col] = values[col]
+        })
+        if err then return nil, err
+        elseif not res then
+          errors = utils.add_error(errors, col, values[col])
+        end
       end
+
     end
   end
 
@@ -425,7 +440,7 @@ function _M:insert(table_name, schema, model, constraints, options)
     return nil, err
   end
 
-  ok, err = check_foreign_constaints(self, model, constraints)
+  ok, err = check_foreign_constraints(self, model, constraints)
   if not ok then
     return nil, err
   end
@@ -548,13 +563,13 @@ end
 function _M:update(table_name, schema, constraints, filter_keys, values, nils, full, model, options)
   options = options or {}
 
-  -- must check unique constaints manually too
+  -- must check unique constraints manually too
   local ok, err = check_unique_constraints(self, table_name, constraints, values, filter_keys, true)
   if not ok then
     return nil, err
   end
 
-  ok, err = check_foreign_constaints(self, values, constraints)
+  ok, err = check_foreign_constraints(self, values, constraints)
   if not ok then
     return nil, err
   end

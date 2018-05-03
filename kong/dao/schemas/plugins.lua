@@ -52,15 +52,15 @@ return {
     },
     route_id = {
       type = "id",
-      --foreign = "routes:id" -- manually tested in self_check
+      foreign = "routes:id",
     },
     service_id = {
       type = "id",
-      --foreign = "services:id" -- manually tested in self_check
+      foreign = "services:id",
     },
     consumer_id = {
       type = "id",
-      -- foreign = "consumers:id" -- manually tested in self_check
+      foreign = "consumers:id",
     },
     name = {
       type = "string",
@@ -81,36 +81,6 @@ return {
     if plugin_t.api_id and (plugin_t.route_id or plugin_t.service_id) then
       return false, Errors.schema("cannot configure plugin with api_id " ..
                                   "and one of route_id or service_id")
-    end
-
-
-    local new_db = dao.db.new_db
-
-    local service_id = plugin_t.service_id
-    if service_id ~= nil then
-      local ok, err = new_db.services:check_foreign_key({ id = service_id },
-                                                        "Service")
-      if not ok then
-        return false, err
-      end
-    end
-
-    local route_id = plugin_t.route_id
-    if route_id ~= nil then
-      local ok, err = new_db.routes:check_foreign_key({ id = route_id },
-                                                      "Route")
-      if not ok then
-        return false, err
-      end
-    end
-
-    local consumer_id = plugin_t.consumer_id
-    if consumer_id ~= nil then
-      local ok, err = new_db.consumers:check_foreign_key({ id = consumer_id },
-                                                         "Consumer")
-      if not ok then
-        return false, err
-      end
     end
 
     -- Load the config schema
