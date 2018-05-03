@@ -1,4 +1,5 @@
 local Factory = require "kong.dao.factory"
+local DB = require "kong.db"
 
 local helpers = require "spec.helpers"
 
@@ -139,7 +140,7 @@ describe("#cassandra", function()
       kong_config.cassandra_lb_policy        = "DCAwareRoundRobin"
       kong_config.cassandra_local_datacenter = "my-dc"
 
-      assert(Factory.new(kong_config))
+      assert(Factory.new(kong_config, DB.new(kong_config)))
     end)
   end)
 end)

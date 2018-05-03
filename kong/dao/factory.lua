@@ -89,6 +89,85 @@ local function load_daos(self, schemas, constraints)
   end
 end
 
+
+local function create_legacy_wrappers(self)
+  local new_db = self.db.new_db
+  local dao_wrappers = {}
+  for name, new_dao in pairs(new_db.daos) do
+    dao_wrappers[name] = {
+
+      wrapper = true,
+
+      cache_key = function(_, a1, a2, a3, a4, a5)
+        return new_dao:cache_key(a1, a2, a3, a4, a5)
+      end,
+
+      entity_cache_key = function(_, entity)
+        log.err("[legacy wrapper] entity_cache_key not implemented")
+        return nil
+      end,
+
+      insert = function(_, tbl, opts)
+        if opts then
+          if opts.ttl then
+            log.warn("[legacy wrapper] ttl is ignored")
+          end
+          if opts.quiet then
+            log.warn("[legacy wrapper] quiet is ignored, event always sent")
+          end
+        end
+        return new_dao:insert(tbl)
+      end,
+
+      find = function(_, args)
+        return new_dao:select(args)
+      end,
+
+      find_all = function(_)
+        return nil, "[legacy wrapper] find_all not implemented"
+      end,
+
+      find_page = function(_, tbl, page_offset, page_size)
+        if tbl and next(tbl) then
+          return nil, "[legacy wrapper] filtering is not supported"
+        end
+        return new_dao:page(page_size, page_offset)
+      end,
+
+      update = function(_, tbl, filter_keys, opts)
+        if opts then
+          if opts.full then
+            log.warn("[legacy wrapper] full is ignored")
+          end
+          if opts.quiet then
+            log.warn("[legacy wrapper] quiet is ignored, event always sent")
+          end
+        end
+        return new_dao:update(filter_keys, tbl)
+      end,
+
+      delete = function(_, tbl, opts)
+        if opts then
+          if opts.quiet then
+            log.warn("[legacy wrapper] quiet is ignored, event always sent")
+          end
+        end
+        return new_dao:delete(tbl)
+      end,
+
+      truncate = function(_)
+        log.err("[legacy wrapper] truncate not implemented")
+        return nil
+      end,
+    }
+  end
+
+  -- Make wrappers accessible by keying daos, but do not return
+  -- them when iterating self.daos with pairs()
+  setmetatable(self.daos, { __index = dao_wrappers })
+end
+
+
 function _M.new(kong_config, new_db)
   local self = {
     db_type = kong_config.database,
@@ -129,6 +208,8 @@ function _M.new(kong_config, new_db)
 
   local constraints = build_constraints(schemas)
   load_daos(self, schemas, constraints)
+
+  create_legacy_wrappers(self)
 
   return setmetatable(self, _M)
 end
